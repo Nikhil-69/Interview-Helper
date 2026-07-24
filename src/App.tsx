@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Settings, X, Minus, Send, Paperclip, Loader2, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, Coins, LogOut } from 'lucide-react';
-import { login, fetchMe, askCopilot, getToken, clearToken, ApiError, type User } from './api';
+import { login, fetchMe, askCopilot, compressImage, getToken, clearToken, ApiError, type User } from './api';
 import ReactMarkdown from 'react-markdown';
 
 type Message = {
@@ -131,7 +131,9 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
+        compressImage(reader.result as string)
+          .then(setSelectedImage)
+          .catch(() => setSelectedImage(reader.result as string));
       };
       reader.readAsDataURL(file);
     }
@@ -141,7 +143,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
     try {
       const screenshotBase64 = await window.electronAPI?.takeScreenshot();
       if (screenshotBase64) {
-        setSelectedImage(screenshotBase64);
+        setSelectedImage(await compressImage(screenshotBase64));
       }
     } catch (error) {
       console.error("Failed to take screenshot:", error);

@@ -65,6 +65,28 @@ export async function fetchBalance(): Promise<number> {
   return data.credits;
 }
 
+// Downscale + JPEG-encode images before upload. Full-resolution PNG screenshots
+// can exceed serverless body limits (Vercel: ~4.5 MB) and waste vision tokens;
+// ~1920px JPEG keeps on-screen text readable for the model.
+export async function compressImage(dataUrl: string, maxDim = 1920, quality = 0.85): Promise<string> {
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = dataUrl;
+  });
+
+  const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+  // Already small enough (< ~750 KB as base64) and needs no resize — keep as-is.
+  if (scale === 1 && dataUrl.length < 1_000_000) return dataUrl;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
 export async function askCopilot(
   context: string,
   history: { role: 'user' | 'assistant'; content: string }[],
