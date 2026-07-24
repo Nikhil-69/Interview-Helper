@@ -610,6 +610,7 @@ input:focus, textarea:focus {
   font-size: var(--content-font-size);
   line-height: 1.5;
   min-width: 0;
+  cursor: default;
 }
 
 .message-row.user .message {
