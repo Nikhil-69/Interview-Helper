@@ -10,7 +10,51 @@ A floating, always-on-top AI assistant for live interviews (Cluely-style), built
 - Chat with pre-meeting context (job description, resume, custom instructions)
 - Global shortcut **Ctrl/Cmd + Shift + Space** to show/hide the window (useful since it skips the taskbar/dock)
 
-## Getting started
+## Install
+
+Download the latest build for your platform from the [**Releases**](https://github.com/Nikhil-69/Interview-Helper/releases/latest) page.
+
+### Windows
+
+1. Download `Interview-Hack-Setup-<version>.exe`.
+2. Run it. If SmartScreen warns about an unrecognized app, click **More info → Run anyway** (the app is unsigned).
+3. It installs per-user — no admin rights needed.
+
+### macOS (Apple Silicon)
+
+1. Download `Interview-Hack-<version>-arm64.dmg`, open it, and drag **Interview Hack** to **Applications**.
+2. The app is unsigned, so macOS will say *"Interview Hack is damaged and can't be opened."* This is expected — clear the quarantine flag once with:
+
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/Interview Hack.app"
+   ```
+
+3. Open it normally afterward.
+
+> Only Apple Silicon (M-series) builds are published. There is no Intel build yet.
+
+### Linux
+
+- **AppImage** (recommended — supports auto-update):
+
+  ```bash
+  chmod +x Interview-Hack-<version>.AppImage
+  ./Interview-Hack-<version>.AppImage
+  ```
+
+- **Debian/Ubuntu** (`.deb`):
+
+  ```bash
+  sudo apt install ./interview-hack_<version>_amd64.deb
+  ```
+
+  Note: `.deb` installs do **not** auto-update — download a newer `.deb` to upgrade.
+
+### Updates
+
+The app checks for updates on launch and every few hours, downloading in the background and prompting you to **Restart to update** (or you can use **Check for updates** in the setup screen). Auto-update works on Windows, the Linux AppImage, and macOS. On macOS the app updates itself in place (no re-download needed) since it is unsigned.
+
+## Getting started (development)
 
 ```bash
 npm install
