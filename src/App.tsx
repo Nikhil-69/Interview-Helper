@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Settings, X, Minus, Send, Paperclip, Loader2, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, Coins, LogOut } from 'lucide-react';
+import { Settings, X, Minus, Send, Paperclip, Loader2, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, Coins, LogOut, Download } from 'lucide-react';
 import { login, fetchMe, askCopilot, compressImage, getToken, clearToken, ApiError, type User } from './api';
 import ReactMarkdown from 'react-markdown';
 
@@ -15,6 +15,12 @@ const MAX_IMAGES = 4;
 
 type CaptureStatus = { platform: string; protected: boolean; note: string };
 type CaptureScan = { active: boolean; apps: string[] };
+type UpdateStatus = {
+  state: 'downloading' | 'ready' | 'error';
+  version?: string;
+  percent?: number;
+  message?: string;
+};
 type View = 'login' | 'setup' | 'chat';
 
 declare global {
@@ -29,6 +35,10 @@ declare global {
       toggleStealth: (forceState?: boolean) => Promise<boolean>;
       moveToNextDisplay: () => Promise<{ id: number; label: string } | null>;
       onStealthChanged: (cb: (visible: boolean) => void) => () => void;
+      getVersion: () => Promise<string>;
+      checkForUpdates: () => Promise<string | null>;
+      installUpdate: () => void;
+      onUpdateStatus: (cb: (status: UpdateStatus) => void) => () => void;
     };
   }
 }
@@ -57,7 +67,30 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
   const [captureStatus, setCaptureStatus] = useState<CaptureStatus | null>(null);
   const [captureScan, setCaptureScan] = useState<CaptureScan>({ active: false, apps: [] });
   const [dismissedBanner, setDismissedBanner] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [appVersion, setAppVersion] = useState('');
+  const [checkResult, setCheckResult] = useState<'idle' | 'checking' | 'latest' | 'failed'>('idle');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    window.electronAPI?.getVersion().then(setAppVersion).catch(() => {});
+    const unsubscribe = window.electronAPI?.onUpdateStatus((status) => {
+      // Errors are non-fatal (app keeps working); don't nag the user with them.
+      setUpdateStatus(status.state === 'error' ? null : status);
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleCheckForUpdates = async () => {
+    setCheckResult('checking');
+    try {
+      const version = await window.electronAPI?.checkForUpdates();
+      // A newer version triggers the download banner via onUpdateStatus.
+      setCheckResult(version ? 'idle' : 'latest');
+    } catch {
+      setCheckResult('failed');
+    }
+  };
 
   // Restore session if we still have a valid token.
   useEffect(() => {
@@ -248,6 +281,55 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
         </div>
       </div>
 
+      {updateStatus && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 12px',
+            fontSize: 12,
+            color: 'var(--text-secondary)',
+            borderBottom: '1px solid var(--glass-border)',
+          }}
+        >
+          <Download size={13} style={{ flexShrink: 0 }} />
+          {updateStatus.state === 'downloading' ? (
+            <span style={{ flex: 1 }}>
+              Downloading update{updateStatus.version ? ` v${updateStatus.version}` : ''}
+              {updateStatus.percent !== undefined ? ` — ${updateStatus.percent}%` : '…'}
+            </span>
+          ) : (
+            <>
+              <span style={{ flex: 1 }}>
+                Update {updateStatus.version ? `v${updateStatus.version} ` : ''}ready
+              </span>
+              <button
+                onClick={() => window.electronAPI?.installUpdate()}
+                style={{
+                  background: 'var(--accent-color)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '3px 10px',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                Restart to update
+              </button>
+              <button
+                onClick={() => setUpdateStatus(null)}
+                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, display: 'flex' }}
+                title="Later"
+              >
+                <X size={13} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {view === 'login' && (
         <div className="view-container">
           <div className="glass-panel">
@@ -298,6 +380,36 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
           <button className="primary" onClick={() => setView('chat')}>
             Start Copilot
           </button>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              fontSize: 11,
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {appVersion && <span>v{appVersion}</span>}
+            <button
+              onClick={handleCheckForUpdates}
+              disabled={checkResult === 'checking'}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+                fontSize: 11,
+                padding: 0,
+              }}
+            >
+              {checkResult === 'checking' ? 'Checking…' : 'Check for updates'}
+            </button>
+            {checkResult === 'latest' && <span>You're on the latest version</span>}
+            {checkResult === 'failed' && <span>Check failed — try again later</span>}
+          </div>
         </div>
       )}
 

@@ -16,4 +16,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('stealth-changed', listener);
     return () => ipcRenderer.removeListener('stealth-changed', listener);
   },
+
+  // Auto-update
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  installUpdate: () => ipcRenderer.send('updater:install'),
+  onUpdateStatus: (cb) => {
+    const listener = (_e, status) => cb(status);
+    ipcRenderer.on('updater:status', listener);
+    return () => ipcRenderer.removeListener('updater:status', listener);
+  },
 });

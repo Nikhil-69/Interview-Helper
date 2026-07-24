@@ -5,6 +5,10 @@ import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import crypto from 'crypto';
+import electronUpdater from 'electron-updater';
+
+// electron-updater is CommonJS; grab autoUpdater off the default export.
+const { autoUpdater } = electronUpdater;
 
 const execFileAsync = promisify(execFile);
 
@@ -78,7 +82,195 @@ if (isLinux) {
   app.commandLine.appendSwitch('enable-transparent-visuals');
 }
 
+// --- Auto-update (GitHub Releases) ------------------------------------------
+
+// Updates download in the background; installation waits for an explicit
+// "restart now" from the renderer (or the next app quit) so we never restart
+// the overlay mid-interview.
+//
+// Windows/Linux use electron-updater. macOS gets a custom updater below:
+// Squirrel.Mac (what electron-updater delegates to on mac) refuses to install
+// into an unsigned app, and we ship without a paid Developer ID cert. So on
+// mac we download the release zip ourselves, swap the .app bundle, relaunch.
+
+function sendUpdateStatus(payload) {
+  mainWindow?.webContents?.send('updater:status', payload);
+}
+
+const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000;
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) return; // dev builds have no update metadata
+
+  if (isMac) {
+    macCheckForUpdate().catch(() => {});
+    setInterval(() => macCheckForUpdate().catch(() => {}), UPDATE_CHECK_INTERVAL);
+    return;
+  }
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    sendUpdateStatus({ state: 'downloading', version: info.version });
+  });
+  autoUpdater.on('download-progress', (p) => {
+    sendUpdateStatus({ state: 'downloading', percent: Math.round(p.percent) });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdateStatus({ state: 'ready', version: info.version });
+  });
+  autoUpdater.on('error', (err) => {
+    // Non-fatal: the app keeps working on the current version.
+    console.error('Auto-update error:', err);
+    sendUpdateStatus({ state: 'error', message: err?.message || String(err) });
+  });
+
+  autoUpdater.checkForUpdates().catch(() => {});
+  // Long-running sessions still pick up releases published after launch.
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), UPDATE_CHECK_INTERVAL);
+}
+
+// --- macOS unsigned-app updater ---------------------------------------------
+
+const GITHUB_REPO = 'Nikhil-69/Interview-Helper';
+const macUpdate = { version: null, zipPath: null, busy: false };
+
+function isNewerVersion(candidate, current) {
+  const a = candidate.split('.').map(Number);
+  const b = current.split('.').map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] || 0) - (b[i] || 0);
+    if (diff !== 0) return diff > 0;
+  }
+  return false;
+}
+
+// Returns the newer version string if one exists (and kicks off the download),
+// or null when already up to date.
+async function macCheckForUpdate() {
+  if (macUpdate.busy) return macUpdate.version;
+  if (macUpdate.zipPath) return macUpdate.version; // already downloaded
+
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'interview-hack-updater' },
+  });
+  if (!res.ok) throw new Error(`GitHub API responded ${res.status}`);
+  const release = await res.json();
+  const version = String(release.tag_name || '').replace(/^v/, '');
+  if (!version || !isNewerVersion(version, app.getVersion())) return null;
+
+  // electron-builder names mac zips "<name>-<version>-mac.zip" (x64) and
+  // "<name>-<version>-arm64-mac.zip" (Apple Silicon).
+  const zips = (release.assets || []).filter((a) => a.name.endsWith('-mac.zip'));
+  const wantArm = process.arch === 'arm64';
+  const asset =
+    zips.find((a) => a.name.includes('arm64') === wantArm) || zips[0];
+  if (!asset) throw new Error('No mac zip asset on the latest release');
+
+  macUpdate.busy = true;
+  try {
+    sendUpdateStatus({ state: 'downloading', version });
+    const zipPath = path.join(app.getPath('temp'), `ih-update-${version}.zip`);
+    await downloadToFile(asset.browser_download_url, zipPath, (percent) =>
+      sendUpdateStatus({ state: 'downloading', version, percent })
+    );
+    macUpdate.version = version;
+    macUpdate.zipPath = zipPath;
+    sendUpdateStatus({ state: 'ready', version });
+  } catch (err) {
+    console.error('Mac update download error:', err);
+    sendUpdateStatus({ state: 'error', message: err?.message || String(err) });
+    throw err;
+  } finally {
+    macUpdate.busy = false;
+  }
+  return version;
+}
+
+async function downloadToFile(url, dest, onProgress) {
+  const res = await fetch(url, { headers: { 'User-Agent': 'interview-hack-updater' } });
+  if (!res.ok) throw new Error(`Download failed with ${res.status}`);
+  const total = Number(res.headers.get('content-length')) || 0;
+  const chunks = [];
+  let received = 0;
+  let lastPercent = -1;
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(Buffer.from(value));
+    received += value.length;
+    if (total) {
+      const percent = Math.round((received / total) * 100);
+      if (percent !== lastPercent) {
+        lastPercent = percent;
+        onProgress?.(percent);
+      }
+    }
+  }
+  await fs.promises.writeFile(dest, Buffer.concat(chunks));
+}
+
+// Swap the running .app bundle for the downloaded one and relaunch. The old
+// bundle is kept beside it until the new one is in place so a failed move can
+// be rolled back.
+async function macInstallUpdate() {
+  if (!macUpdate.zipPath) return;
+
+  const extractDir = await fs.promises.mkdtemp(path.join(app.getPath('temp'), 'ih-update-'));
+  await execFileAsync('ditto', ['-xk', macUpdate.zipPath, extractDir]);
+  const appName = (await fs.promises.readdir(extractDir)).find((e) => e.endsWith('.app'));
+  if (!appName) throw new Error('Update zip did not contain an .app bundle');
+  const newApp = path.join(extractDir, appName);
+
+  // process.execPath is <bundle>.app/Contents/MacOS/<bin>
+  const currentApp = path.resolve(process.execPath, '..', '..', '..');
+  if (!currentApp.endsWith('.app')) throw new Error(`Unexpected app path: ${currentApp}`);
+
+  // Downloads made by the app itself normally carry no quarantine flag, but
+  // clear it defensively so Gatekeeper never blocks the relaunch.
+  await execFileAsync('xattr', ['-dr', 'com.apple.quarantine', newApp]).catch(() => {});
+
+  const backup = `${currentApp}.old`;
+  await execFileAsync('rm', ['-rf', backup]);
+  await execFileAsync('mv', [currentApp, backup]);
+  try {
+    await execFileAsync('mv', [newApp, currentApp]);
+  } catch (err) {
+    await execFileAsync('mv', [backup, currentApp]); // roll back
+    throw err;
+  }
+  execFileAsync('rm', ['-rf', backup]).catch(() => {});
+  fs.promises.unlink(macUpdate.zipPath).catch(() => {});
+
+  app.relaunch();
+  app.quit();
+}
+
+ipcMain.handle('updater:check', async () => {
+  if (!app.isPackaged) return null;
+  if (isMac) return macCheckForUpdate();
+  const result = await autoUpdater.checkForUpdates();
+  const version = result?.updateInfo?.version;
+  return version && isNewerVersion(version, app.getVersion()) ? version : null;
+});
+
+ipcMain.on('updater:install', () => {
+  if (isMac) {
+    macInstallUpdate().catch((err) => {
+      console.error('Mac update install error:', err);
+      sendUpdateStatus({ state: 'error', message: err?.message || String(err) });
+    });
+  } else {
+    autoUpdater.quitAndInstall();
+  }
+});
+
+ipcMain.handle('app:getVersion', () => app.getVersion());
+
 app.whenReady().then(() => {
+  setupAutoUpdater();
   // On Linux, transparent windows render as black if created immediately
   // after ready — the compositor needs a moment to pick up the visuals.
   if (isLinux) {

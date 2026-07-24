@@ -1,7 +1,7 @@
 {
   "name": "interview-hack",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -11,13 +11,22 @@
     "preview": "vite preview",
     "electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
     "start": "concurrently -k \"npm run dev\" \"npm run electron\"",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "release": "npm run build && electron-builder --publish always"
   },
   "build": {
     "appId": "com.interview-hack.app",
     "productName": "Interview Hack",
+    "publish": {
+      "provider": "github",
+      "owner": "Nikhil-69",
+      "repo": "Interview-Helper"
+    },
     "mac": {
-      "target": "dmg"
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
       "target": "nsis"
@@ -39,6 +48,7 @@
     ]
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "lucide-react": "^1.23.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
