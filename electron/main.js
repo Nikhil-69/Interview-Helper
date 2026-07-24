@@ -365,13 +365,23 @@ async function captureLinuxScreenshot(tmpPath) {
 
 // IPC handlers
 ipcMain.handle('take-screenshot', async () => {
-  if (mainWindow) {
-    // Hide the window briefly so it doesn't get captured (needed on Linux
-    // where setContentProtection is unsupported)
-    mainWindow.hide();
+  // setContentProtection(true) already excludes the window from capture on
+  // mac/Windows (see createWindow), so hiding it there just flashes the app
+  // away and back for no reason. Only Linux — which has no such flag — needs
+  // the window made invisible during capture.
+  //
+  // Use setOpacity(0), not hide()/show(): hide() unmaps the window, and
+  // remapping it with show() re-triggers the same "transparent window
+  // renders black for a moment" compositor hiccup handled at startup (see
+  // createWindow's 300ms delay). Fading opacity instead keeps the window
+  // mapped throughout, so there's nothing for the compositor to redraw from
+  // scratch — the screen capture still sees nothing (opacity 0 is what
+  // composites onto the screen), but there's no black flash on return.
+  const needsHide = isLinux && mainWindow;
+  if (needsHide) {
+    mainWindow.setOpacity(0);
+    await new Promise((resolve) => setTimeout(resolve, 300));
   }
-
-  await new Promise((resolve) => setTimeout(resolve, isLinux ? 300 : 100));
 
   const tmpPath = path.join(app.getPath('temp'), `${crypto.randomUUID()}.png`);
 
@@ -387,13 +397,13 @@ ipcMain.handle('take-screenshot', async () => {
     const buffer = await fs.promises.readFile(tmpPath);
     await fs.promises.unlink(tmpPath);
 
-    if (mainWindow) {
-      mainWindow.show();
+    if (needsHide) {
+      mainWindow.setOpacity(1);
     }
 
     return `data:image/png;base64,${buffer.toString('base64')}`;
   } catch (err) {
-    if (mainWindow) mainWindow.show();
+    if (needsHide) mainWindow.setOpacity(1);
     console.error('Screenshot error:', err);
     throw err;
   }
@@ -543,12 +553,18 @@ ipcMain.handle('stealth:toggle', (_e, forceState) => toggleStealth(forceState));
 ipcMain.handle('window:moveToNextDisplay', () => moveToNextDisplay());
 // setSize() alone doesn't reliably keep the window's top-left corner fixed on
 // every platform/WM — some reposition (e.g. re-center) a frameless window as
-// it resizes. Read the current position and pass it through setBounds() so
-// the anchor point is always explicit instead of implicit.
+// it resizes. Read the current bounds and pass an explicit target through
+// setBounds() instead of relying on implicit anchoring.
+//
+// Anchored to the RIGHT edge (not the left): all of the header's buttons
+// (Hide/Ask, close, etc.) hug the right edge of the window, so keeping that
+// edge fixed on screen is what keeps those buttons from visually jumping
+// when the window grows/shrinks — the window eats into itself from the left
+// instead.
 function resizeInPlace(width, height) {
   if (!mainWindow) return;
-  const { x, y } = mainWindow.getBounds();
-  mainWindow.setBounds({ x, y, width, height });
+  const { x, y, width: oldWidth } = mainWindow.getBounds();
+  mainWindow.setBounds({ x: x + oldWidth - width, y, width, height });
 }
 
 ipcMain.handle('window:setCompact', (_e, compact) => {
