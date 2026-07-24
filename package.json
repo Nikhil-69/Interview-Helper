@@ -20,7 +20,8 @@
     "publish": {
       "provider": "github",
       "owner": "Nikhil-69",
-      "repo": "Interview-Helper"
+      "repo": "Interview-Helper",
+      "releaseType": "release"
     },
     "mac": {
       "target": [
