@@ -6,8 +6,12 @@ import ReactMarkdown from 'react-markdown';
 type Message = {
   role: 'user' | 'assistant';
   content: string;
-  image?: string;
+  images?: string[];
 };
+
+// Compressed JPEGs run a few hundred KB each; cap the batch so the request
+// stays under the server's ~4.5 MB body limit.
+const MAX_IMAGES = 4;
 
 type CaptureStatus = { platform: string; protected: boolean; note: string };
 type CaptureScan = { active: boolean; apps: string[] };
@@ -49,7 +53,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [captureStatus, setCaptureStatus] = useState<CaptureStatus | null>(null);
   const [captureScan, setCaptureScan] = useState<CaptureScan>({ active: false, apps: [] });
   const [dismissedBanner, setDismissedBanner] = useState(false);
@@ -126,24 +130,33 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
     scrollToBottom();
   }, [messages, isLoading]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        compressImage(reader.result as string)
-          .then(setSelectedImage)
-          .catch(() => setSelectedImage(reader.result as string));
-      };
-      reader.readAsDataURL(file);
-    }
+  const addImages = (dataUrls: string[]) => {
+    setSelectedImages(prev => [...prev, ...dataUrls].slice(0, MAX_IMAGES));
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!files.length) return;
+    const dataUrls = await Promise.all(files.map(file =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const raw = reader.result as string;
+          compressImage(raw).then(resolve).catch(() => resolve(raw));
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      })
+    ));
+    addImages(dataUrls);
   };
 
   const handleTakeScreenshot = async () => {
     try {
       const screenshotBase64 = await window.electronAPI?.takeScreenshot();
       if (screenshotBase64) {
-        setSelectedImage(await compressImage(screenshotBase64));
+        addImages([await compressImage(screenshotBase64)]);
       }
     } catch (error) {
       console.error("Failed to take screenshot:", error);
@@ -151,22 +164,22 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
   };
 
   const handleSubmit = async () => {
-    if ((!input.trim() && !selectedImage) || isLoading) return;
+    if ((!input.trim() && !selectedImages.length) || isLoading) return;
 
     const userMessage: Message = {
       role: 'user',
       content: input,
-      image: selectedImage || undefined
+      images: selectedImages.length ? selectedImages : undefined
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
-    setSelectedImage(null);
+    setSelectedImages([]);
     setIsLoading(true);
 
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
-      const res = await askCopilot(context, history, userMessage.content, userMessage.image);
+      const res = await askCopilot(context, history, userMessage.content, userMessage.images ?? []);
       setCredits(res.credits);
       setMessages(prev => [...prev, { role: 'assistant', content: res.answer }]);
     } catch (error: any) {
@@ -333,7 +346,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                 <div className="markdown-body">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
-                {msg.image && <img src={msg.image} alt="upload" />}
+                {msg.images?.map((img, i) => <img key={i} src={img} alt={`upload ${i + 1}`} />)}
               </div>
             ))}
             {isLoading && (
@@ -346,27 +359,34 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {selectedImage && (
-              <div style={{ position: 'relative', display: 'inline-block', width: 'fit-content' }}>
-                <img src={selectedImage} alt="preview" style={{ height: '60px', borderRadius: '4px', border: '1px solid var(--glass-border)' }} />
-                <button
-                  onClick={() => setSelectedImage(null)}
-                  style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <X size={10} />
-                </button>
+            {selectedImages.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {selectedImages.map((img, i) => (
+                  <div key={i} style={{ position: 'relative', display: 'inline-block', width: 'fit-content' }}>
+                    <img src={img} alt={`preview ${i + 1}`} style={{ height: '60px', borderRadius: '4px', border: '1px solid var(--glass-border)' }} />
+                    <button
+                      onClick={() => setSelectedImages(prev => prev.filter((_, j) => j !== i))}
+                      style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+                {selectedImages.length >= MAX_IMAGES && (
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Max {MAX_IMAGES} images per request</span>
+                )}
               </div>
             )}
 
             <div className="input-area">
               <div className="file-input-wrapper">
-                <button className="icon-btn" title="Upload Screenshot">
+                <button className="icon-btn" title="Upload Screenshots" disabled={selectedImages.length >= MAX_IMAGES}>
                   <Paperclip size={18} />
                 </button>
-                <input type="file" accept="image/*" onChange={handleImageUpload} />
+                <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={selectedImages.length >= MAX_IMAGES} />
               </div>
 
-              <button className="icon-btn" title="Take Screenshot" onClick={handleTakeScreenshot}>
+              <button className="icon-btn" title="Take Screenshot" onClick={handleTakeScreenshot} disabled={selectedImages.length >= MAX_IMAGES}>
                 <Camera size={18} />
               </button>
 
@@ -380,11 +400,11 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
 
               <button
                 className="icon-btn"
-                style={{ background: (input.trim() || selectedImage) && !isLoading ? 'var(--accent-color)' : 'transparent' }}
+                style={{ background: (input.trim() || selectedImages.length) && !isLoading ? 'var(--accent-color)' : 'transparent' }}
                 onClick={handleSubmit}
-                disabled={(!input.trim() && !selectedImage) || isLoading}
+                disabled={(!input.trim() && !selectedImages.length) || isLoading}
               >
-                <Send size={18} color={(input.trim() || selectedImage) && !isLoading ? 'white' : 'var(--text-secondary)'} />
+                <Send size={18} color={(input.trim() || selectedImages.length) && !isLoading ? 'white' : 'var(--text-secondary)'} />
               </button>
             </div>
           </div>

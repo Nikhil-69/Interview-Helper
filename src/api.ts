@@ -91,10 +91,11 @@ export async function askCopilot(
   context: string,
   history: { role: 'user' | 'assistant'; content: string }[],
   question: string,
-  imageSrc?: string
+  images: string[] = []
 ): Promise<{ answer: string; credits: number; creditsCharged: number }> {
   return request('/ai/ask', {
     method: 'POST',
-    body: { context, history, question, imageSrc: imageSrc || null },
+    // imageSrc kept alongside images so an older server build still sees the first image.
+    body: { context, history, question, images, imageSrc: images[0] || null },
   });
 }
