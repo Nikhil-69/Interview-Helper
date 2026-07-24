@@ -28,10 +28,18 @@ let mainWindow = null;
 const WINDOW_TITLE = 'Interview Copilot';
 app.setName(WINDOW_TITLE); // influences WM_CLASS on X11 / app_id on Wayland
 
+// "Reduce size" settings toggle shrinks the overlay to this footprint; the
+// normal footprint is restored when the toggle is switched off.
+const NORMAL_SIZE = { width: 400, height: 750 };
+const COMPACT_SIZE = { width: 320, height: 560 };
+// Collapsed = just the pill toolbar, no content area (see the "Hide"/"Ask"
+// header toggle in App.tsx).
+const COLLAPSED_SIZE = { width: 260, height: 64 };
+
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 400,
-    height: 750,
+    width: NORMAL_SIZE.width,
+    height: NORMAL_SIZE.height,
     title: WINDOW_TITLE,
     transparent: true,
     frame: false,
@@ -533,6 +541,30 @@ ipcMain.handle('capture:getStatus', () => getCaptureStatus());
 ipcMain.handle('capture:scan', () => scanForCaptureApps());
 ipcMain.handle('stealth:toggle', (_e, forceState) => toggleStealth(forceState));
 ipcMain.handle('window:moveToNextDisplay', () => moveToNextDisplay());
+// setSize() alone doesn't reliably keep the window's top-left corner fixed on
+// every platform/WM — some reposition (e.g. re-center) a frameless window as
+// it resizes. Read the current position and pass it through setBounds() so
+// the anchor point is always explicit instead of implicit.
+function resizeInPlace(width, height) {
+  if (!mainWindow) return;
+  const { x, y } = mainWindow.getBounds();
+  mainWindow.setBounds({ x, y, width, height });
+}
+
+ipcMain.handle('window:setCompact', (_e, compact) => {
+  if (!mainWindow) return false;
+  const size = compact ? COMPACT_SIZE : NORMAL_SIZE;
+  resizeInPlace(size.width, size.height);
+  return compact;
+});
+// Collapse the window down to just the pill toolbar, or restore it to
+// `expandedSize` (whatever the renderer's current normal/compact size is).
+ipcMain.handle('window:setCollapsed', (_e, collapsed, expandedSize) => {
+  if (!mainWindow) return false;
+  const size = collapsed ? COLLAPSED_SIZE : expandedSize || NORMAL_SIZE;
+  resizeInPlace(size.width, size.height);
+  return collapsed;
+});
 
 // App controls
 ipcMain.on('close-app', () => {

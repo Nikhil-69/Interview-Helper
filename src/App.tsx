@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Settings, X, Minus, Send, Paperclip, Loader2, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, Coins, LogOut, Download } from 'lucide-react';
+import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon } from 'lucide-react';
 import { login, fetchMe, askCopilot, compressImage, getToken, clearToken, ApiError, type User } from './api';
 import ReactMarkdown from 'react-markdown';
+import SettingsPanel from './components/SettingsPanel';
+import { applySettings, loadSettings, saveSettings, NORMAL_WINDOW_SIZE, COMPACT_WINDOW_SIZE, type AppSettings } from './settings';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -34,6 +36,8 @@ declare global {
       scanForCaptureApps: () => Promise<CaptureScan>;
       toggleStealth: (forceState?: boolean) => Promise<boolean>;
       moveToNextDisplay: () => Promise<{ id: number; label: string } | null>;
+      setCompactMode: (compact: boolean) => Promise<boolean>;
+      setCollapsed: (collapsed: boolean, expandedSize: { width: number; height: number }) => Promise<boolean>;
       onStealthChanged: (cb: (visible: boolean) => void) => () => void;
       getVersion: () => Promise<string>;
       checkForUpdates: () => Promise<string | null>;
@@ -70,7 +74,30 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [appVersion, setAppVersion] = useState('');
   const [checkResult, setCheckResult] = useState<'idle' | 'checking' | 'latest' | 'failed'>('idle');
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [showSettings, setShowSettings] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Apply persisted settings on launch (CSS vars + the main-process window size).
+  useEffect(() => {
+    applySettings(settings);
+    window.electronAPI?.setCompactMode(settings.compact);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const updateSettings = (partial: Partial<AppSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...partial };
+      applySettings(next);
+      saveSettings(next);
+      if (partial.compact !== undefined) {
+        window.electronAPI?.setCompactMode(partial.compact);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     window.electronAPI?.getVersion().then(setAppVersion).catch(() => {});
@@ -120,6 +147,14 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
     }
   };
 
+  const handleToggleCollapse = async () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    if (next) setShowMenu(false);
+    const expandedSize = settings.compact ? COMPACT_WINDOW_SIZE : NORMAL_WINDOW_SIZE;
+    await window.electronAPI?.setCollapsed(next, expandedSize);
+  };
+
   const isExposed = captureStatus ? !captureStatus.protected : false;
   const showBanner = !dismissedBanner && (isExposed || captureScan.active);
 
@@ -165,24 +200,6 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
 
   const addImages = (dataUrls: string[]) => {
     setSelectedImages(prev => [...prev, ...dataUrls].slice(0, MAX_IMAGES));
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = ''; // allow re-selecting the same file later
-    if (!files.length) return;
-    const dataUrls = await Promise.all(files.map(file =>
-      new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const raw = reader.result as string;
-          compressImage(raw).then(resolve).catch(() => resolve(raw));
-        };
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      })
-    ));
-    addImages(dataUrls);
   };
 
   const handleTakeScreenshot = async () => {
@@ -242,46 +259,76 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
   return (
     <div className="glass-container">
       <div className="app-header">
-        <h1>Interview Copilot</h1>
+        <div className="brand-pill">
+          <span className="brand-dot" />
+          <span className="brand-name">Interview Copilot</span>
+        </div>
         <div className="header-controls">
-          {user && (
+          {!collapsed && user && (
             <span className="credits-pill" title="Available credits">
               <Coins size={12} />
               {credits}
             </span>
           )}
-          {captureStatus && (
+          {!collapsed && captureStatus && (
             <span
               className={`shield-pill ${captureStatus.protected ? 'protected' : 'exposed'}`}
-              title={captureStatus.note}
+              title={`${captureStatus.protected ? 'Hidden' : 'Exposed'} — ${captureStatus.note}`}
             >
               {captureStatus.protected ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
-              {captureStatus.protected ? 'Hidden' : 'Exposed'}
             </span>
           )}
-          <button className="icon-btn" onClick={() => window.electronAPI?.toggleStealth(false)} title="Hide overlay (Ctrl/Cmd+Shift+Space)">
-            <EyeOff size={14} />
+          <button
+            className={`pill-btn ${collapsed ? 'accent' : ''}`}
+            onClick={handleToggleCollapse}
+            title={collapsed ? 'Show panel' : 'Collapse to pill'}
+          >
+            {collapsed ? <Sparkles size={14} /> : <EyeOff size={14} />}
+            <span>{collapsed ? 'Ask' : 'Hide'}</span>
           </button>
-          {user && (
-            <>
-              <button className="icon-btn" onClick={() => setView('setup')} title="Settings">
-                <Settings size={14} />
+          {!collapsed && user && (
+            <div className="menu-wrapper">
+              <button className="icon-btn" onClick={() => setShowMenu((v) => !v)} title="More">
+                <MoreVertical size={14} />
               </button>
-              <button className="icon-btn" onClick={handleLogout} title="Log out">
-                <LogOut size={14} />
-              </button>
-            </>
+              {showMenu && (
+                <>
+                  <div className="menu-backdrop" onClick={() => setShowMenu(false)} />
+                  <div className="dropdown-menu">
+                    <button onClick={() => { setView('setup'); setShowMenu(false); }}>
+                      <Settings size={14} /> Edit context
+                    </button>
+                    <button onClick={() => { setShowSettings(true); setShowMenu(false); }}>
+                      <SlidersHorizontal size={14} /> Settings
+                    </button>
+                    <button className="danger" onClick={() => { setShowMenu(false); handleLogout(); }}>
+                      <LogOut size={14} /> Log out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
-          <button className="icon-btn" onClick={handleMinimize}>
-            <Minus size={14} />
-          </button>
-          <button className="icon-btn" onClick={handleClose}>
+          {!collapsed && (
+            <button className="icon-btn square-btn" onClick={handleMinimize}>
+              <Minus size={14} />
+            </button>
+          )}
+          <button className="icon-btn square-btn" onClick={handleClose}>
             <X size={14} />
           </button>
         </div>
       </div>
 
-      {updateStatus && (
+      {!collapsed && showSettings && (
+        <SettingsPanel
+          settings={settings}
+          onChange={updateSettings}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {!collapsed && updateStatus && (
         <div
           style={{
             display: 'flex',
@@ -330,28 +377,47 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
         </div>
       )}
 
-      {view === 'login' && (
+      {!collapsed && view === 'login' && (
         <div className="view-container">
+          <div className="login-brand">
+            <div className="login-logo">
+              <Sparkles size={22} />
+            </div>
+            <span className="login-title">Interview Copilot</span>
+            <span className="login-subtitle">Sign in to start your session</span>
+          </div>
+
           <div className="glass-panel">
             <label className="label">Email</label>
-            <input
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <div className="input-with-icon">
+              <Mail size={15} />
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
           </div>
           <div className="glass-panel">
             <label className="label">Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-            />
+            <div className="input-with-icon">
+              <Lock size={15} />
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
           </div>
-          {authError && <div className="auth-error">{authError}</div>}
+          {authError && (
+            <div className="auth-error">
+              <AlertCircle size={14} style={{ flexShrink: 0 }} />
+              {authError}
+            </div>
+          )}
           <button
             className="primary"
             onClick={handleLogin}
@@ -365,15 +431,23 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
         </div>
       )}
 
-      {view === 'setup' && (
+      {!collapsed && view === 'setup' && (
         <div className="view-container">
           <div className="glass-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <label className="label">Pre-meeting Context</label>
+            <div className="section-header">
+              <div className="section-header-icon">
+                <MessageSquare size={13} />
+              </div>
+              <div className="section-header-text">
+                <label className="label" style={{ marginBottom: 0 }}>Pre-meeting Context</label>
+                <div className="section-header-hint">Helps the assistant tailor its answers</div>
+              </div>
+            </div>
             <textarea
               placeholder="Paste job description, your resume highlights, or specific instructions for the AI..."
               value={context}
               onChange={(e) => setContext(e.target.value)}
-              style={{ flex: 1, resize: 'none' }}
+              style={{ flex: 1, resize: 'none', marginTop: 10 }}
             />
           </div>
 
@@ -381,30 +455,9 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
             Start Copilot
           </button>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              fontSize: 11,
-              color: 'var(--text-secondary)',
-            }}
-          >
+          <div className="version-row">
             {appVersion && <span>v{appVersion}</span>}
-            <button
-              onClick={handleCheckForUpdates}
-              disabled={checkResult === 'checking'}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'inherit',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-                fontSize: 11,
-                padding: 0,
-              }}
-            >
+            <button onClick={handleCheckForUpdates} disabled={checkResult === 'checking'}>
               {checkResult === 'checking' ? 'Checking…' : 'Check for updates'}
             </button>
             {checkResult === 'latest' && <span>You're on the latest version</span>}
@@ -413,7 +466,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
         </div>
       )}
 
-      {view === 'chat' && (
+      {!collapsed && view === 'chat' && (
         <div className="view-container" style={{ padding: '8px 12px' }}>
           {showBanner && (
             <div className={`capture-banner ${isExposed ? '' : 'warn'}`}>
@@ -449,22 +502,37 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
           )}
           <div className="chat-messages">
             {messages.length === 0 && (
-              <div style={{ textAlign: 'center', marginTop: '20px', color: 'var(--text-secondary)', fontSize: 14 }}>
-                Ready to assist. Upload screenshots or ask questions.
+              <div className="empty-state">
+                <div className="empty-state-icon">
+                  <Sparkles size={20} />
+                </div>
+                <div className="empty-state-title">Ready to assist</div>
+                <div className="empty-state-subtitle">Upload a screenshot or ask a question to get started.</div>
               </div>
             )}
             {messages.map((msg, idx) => (
-              <div key={idx} className={`message ${msg.role}`}>
-                <div className="markdown-body">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+              <div key={idx} className={`message-row ${msg.role}`}>
+                <div className="message-avatar">
+                  {msg.role === 'user' ? <UserIcon size={12} /> : <Sparkles size={12} />}
                 </div>
-                {msg.images?.map((img, i) => <img key={i} src={img} alt={`upload ${i + 1}`} />)}
+                <div className="message">
+                  <div className="markdown-body">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                  {msg.images?.map((img, i) => <img key={i} src={img} alt={`upload ${i + 1}`} />)}
+                </div>
               </div>
             ))}
             {isLoading && (
-              <div className="message assistant" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Loader2 size={16} className="spinner" style={{ animation: 'spin 1s linear infinite' }} />
-                Thinking...
+              <div className="message-row assistant">
+                <div className="message-avatar">
+                  <Sparkles size={12} />
+                </div>
+                <div className="message">
+                  <span className="typing-dots">
+                    <span /><span /><span />
+                  </span>
+                </div>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -491,17 +559,6 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
             )}
 
             <div className="input-area">
-              <div className="file-input-wrapper">
-                <button className="icon-btn" title="Upload Screenshots" disabled={selectedImages.length >= MAX_IMAGES}>
-                  <Paperclip size={18} />
-                </button>
-                <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={selectedImages.length >= MAX_IMAGES} />
-              </div>
-
-              <button className="icon-btn" title="Take Screenshot" onClick={handleTakeScreenshot} disabled={selectedImages.length >= MAX_IMAGES}>
-                <Camera size={18} />
-              </button>
-
               <textarea
                 placeholder="Ask a question..."
                 value={input}
@@ -509,6 +566,10 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                 onKeyDown={handleKeyDown}
                 rows={1}
               />
+
+              <button className="icon-btn" title="Take Screenshot" onClick={handleTakeScreenshot} disabled={selectedImages.length >= MAX_IMAGES}>
+                <Camera size={18} />
+              </button>
 
               <button
                 className="icon-btn"
@@ -520,9 +581,6 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
               </button>
             </div>
           </div>
-          <style>{`
-            @keyframes spin { 100% { transform: rotate(360deg); } }
-          `}</style>
         </div>
       )}
     </div>
