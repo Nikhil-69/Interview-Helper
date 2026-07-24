@@ -2,6 +2,10 @@
   "name": "interview-hack",
   "private": true,
   "version": "0.1.0",
+  "author": {
+    "name": "Nikhil",
+    "email": "nikhil.mittal@iimjobs.com"
+  },
   "type": "module",
   "main": "electron/main.js",
   "scripts": {

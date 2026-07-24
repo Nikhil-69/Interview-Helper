@@ -9,7 +9,21 @@ permissions:
   contents: write
 
 jobs:
+  # Create the release up front so the three platform jobs upload into it
+  # instead of racing to create it (which produces duplicate releases).
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub release for tag
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+                 --title "${GITHUB_REF_NAME#v}" --notes "Interview Copilot ${GITHUB_REF_NAME#v}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
