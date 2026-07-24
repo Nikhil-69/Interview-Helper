@@ -280,7 +280,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
           )}
           {!collapsed && user && (
             <div className="menu-wrapper">
-              <button className="icon-btn" onClick={() => setShowMenu((v) => !v)} title="More">
+              <button className="icon-btn" onClick={() => setShowMenu((v) => !v)}>
                 <MoreVertical size={14} />
               </button>
               {showMenu && (
@@ -312,7 +312,6 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
           <button
             className={`pill-btn ${collapsed ? 'accent' : ''}`}
             onClick={handleToggleCollapse}
-            title={collapsed ? 'Show panel' : 'Collapse to pill'}
           >
             {collapsed ? <Sparkles size={14} /> : <EyeOff size={14} />}
             <span>{collapsed ? 'Ask' : 'Hide'}</span>
@@ -363,15 +362,13 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                   borderRadius: 4,
                   padding: '3px 10px',
                   fontSize: 11,
-                  cursor: 'pointer',
                 }}
               >
                 Restart to update
               </button>
               <button
                 onClick={() => setUpdateStatus(null)}
-                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, display: 'flex' }}
-                title="Later"
+                style={{ background: 'none', border: 'none', color: 'inherit', padding: 0, display: 'flex' }}
               >
                 <X size={13} />
               </button>
@@ -486,7 +483,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                 )}
                 <button
                   onClick={() => setDismissedBanner(true)}
-                  style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', display: 'block', marginTop: 4, fontSize: 11, padding: 0 }}
+                  style={{ background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline', display: 'block', marginTop: 4, fontSize: 11, padding: 0 }}
                 >
                   Dismiss
                 </button>
@@ -495,10 +492,10 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
           )}
           {isExposed && (
             <div className="stealth-actions">
-              <button onClick={() => window.electronAPI?.toggleStealth(false)} title="Ctrl/Cmd+Shift+Space">
+              <button onClick={() => window.electronAPI?.toggleStealth(false)}>
                 <EyeOff size={14} /> Panic hide
               </button>
-              <button onClick={handleMoveDisplay} title="Ctrl/Cmd+Shift+M">
+              <button onClick={handleMoveDisplay}>
                 <MonitorUp size={14} /> Move display
               </button>
             </div>
@@ -549,7 +546,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                     <img src={img} alt={`preview ${i + 1}`} style={{ height: '60px', borderRadius: '4px', border: '1px solid var(--glass-border)' }} />
                     <button
                       onClick={() => setSelectedImages(prev => prev.filter((_, j) => j !== i))}
-                      style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                       <X size={10} />
                     </button>
@@ -570,7 +567,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                 rows={1}
               />
 
-              <button className="icon-btn" title="Take Screenshot" onClick={handleTakeScreenshot} disabled={selectedImages.length >= MAX_IMAGES}>
+              <button className="icon-btn" onClick={handleTakeScreenshot} disabled={selectedImages.length >= MAX_IMAGES}>
                 <Camera size={18} />
               </button>
 

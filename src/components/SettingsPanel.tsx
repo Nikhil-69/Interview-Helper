@@ -19,7 +19,7 @@ function SettingsPanel({ settings, onChange, onClose }: Props) {
       <div className="settings-panel glass-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-panel-header">
           <h2>Settings</h2>
-          <button className="icon-btn" onClick={onClose} title="Close">
+          <button className="icon-btn" onClick={onClose}>
             <X size={16} />
           </button>
         </div>
@@ -58,7 +58,6 @@ function SettingsPanel({ settings, onChange, onClose }: Props) {
                 key={s.color}
                 className={`swatch ${settings.accentColor === s.color ? 'active' : ''}`}
                 style={{ background: s.color }}
-                title={s.name}
                 onClick={() => onChange({ accentColor: s.color, accentHover: s.hover })}
               />
             ))}
@@ -66,7 +65,6 @@ function SettingsPanel({ settings, onChange, onClose }: Props) {
               type="color"
               className="swatch custom-swatch"
               value={settings.accentColor}
-              title="Custom color"
               onChange={(e) => onChange({ accentColor: e.target.value, accentHover: darken(e.target.value) })}
             />
           </div>
