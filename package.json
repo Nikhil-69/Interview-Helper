@@ -19,6 +19,16 @@
     "mac": {
       "target": "dmg"
     },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    },
     "directories": {
       "output": "release"
     },
@@ -30,7 +40,6 @@
   },
   "dependencies": {
     "lucide-react": "^1.23.0",
-    "openai": "^6.45.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0"
