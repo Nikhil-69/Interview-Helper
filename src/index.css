@@ -116,7 +116,6 @@ body {
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 500;
-  cursor: pointer;
   transition: background 0.2s ease;
 }
 
@@ -178,7 +177,6 @@ body {
   padding: 8px 10px;
   border-radius: 6px;
   font-size: 12px;
-  cursor: pointer;
   text-align: left;
   width: 100%;
 }
@@ -325,7 +323,6 @@ body {
   border: none;
   color: inherit;
   text-decoration: underline;
-  cursor: pointer;
   font-size: 11px;
   padding: 0;
 }
@@ -394,7 +391,6 @@ body {
   border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -410,7 +406,6 @@ body {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  cursor: pointer;
   padding: 4px;
   border-radius: 6px;
   transition: all 0.2s ease;
@@ -449,7 +444,6 @@ button.primary {
   padding: 12px 16px;
   border-radius: 10px;
   font-weight: 500;
-  cursor: pointer;
   transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.15s ease;
   width: 100%;
   box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent-color) 55%, transparent);
@@ -686,21 +680,6 @@ input:focus, textarea:focus {
   padding-bottom: 4px;
 }
 
-.file-input-wrapper {
-  position: relative;
-  overflow: hidden;
-  display: inline-block;
-}
-
-.file-input-wrapper input[type=file] {
-  font-size: 100px;
-  position: absolute;
-  left: 0;
-  top: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -816,7 +795,6 @@ input:focus, textarea:focus {
   height: 24px;
   border-radius: 50%;
   border: 2px solid transparent;
-  cursor: pointer;
   padding: 0;
 }
 
@@ -846,7 +824,6 @@ input:focus, textarea:focus {
   padding: 6px 8px;
   border-radius: 6px;
   font-size: 12px;
-  cursor: pointer;
 }
 
 .segmented button.active {

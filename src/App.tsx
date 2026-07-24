@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Paperclip, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon } from 'lucide-react';
+import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon } from 'lucide-react';
 import { login, fetchMe, askCopilot, compressImage, getToken, clearToken, ApiError, type User } from './api';
 import ReactMarkdown from 'react-markdown';
 import SettingsPanel from './components/SettingsPanel';
@@ -200,24 +200,6 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
 
   const addImages = (dataUrls: string[]) => {
     setSelectedImages(prev => [...prev, ...dataUrls].slice(0, MAX_IMAGES));
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = ''; // allow re-selecting the same file later
-    if (!files.length) return;
-    const dataUrls = await Promise.all(files.map(file =>
-      new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const raw = reader.result as string;
-          compressImage(raw).then(resolve).catch(() => resolve(raw));
-        };
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      })
-    ));
-    addImages(dataUrls);
   };
 
   const handleTakeScreenshot = async () => {
@@ -577,17 +559,6 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
             )}
 
             <div className="input-area">
-              <div className="file-input-wrapper">
-                <button className="icon-btn" title="Upload Screenshots" disabled={selectedImages.length >= MAX_IMAGES}>
-                  <Paperclip size={18} />
-                </button>
-                <input type="file" accept="image/*" multiple onChange={handleImageUpload} disabled={selectedImages.length >= MAX_IMAGES} />
-              </div>
-
-              <button className="icon-btn" title="Take Screenshot" onClick={handleTakeScreenshot} disabled={selectedImages.length >= MAX_IMAGES}>
-                <Camera size={18} />
-              </button>
-
               <textarea
                 placeholder="Ask a question..."
                 value={input}
@@ -595,6 +566,10 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                 onKeyDown={handleKeyDown}
                 rows={1}
               />
+
+              <button className="icon-btn" title="Take Screenshot" onClick={handleTakeScreenshot} disabled={selectedImages.length >= MAX_IMAGES}>
+                <Camera size={18} />
+              </button>
 
               <button
                 className="icon-btn"

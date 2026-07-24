@@ -541,10 +541,20 @@ ipcMain.handle('capture:getStatus', () => getCaptureStatus());
 ipcMain.handle('capture:scan', () => scanForCaptureApps());
 ipcMain.handle('stealth:toggle', (_e, forceState) => toggleStealth(forceState));
 ipcMain.handle('window:moveToNextDisplay', () => moveToNextDisplay());
+// setSize() alone doesn't reliably keep the window's top-left corner fixed on
+// every platform/WM — some reposition (e.g. re-center) a frameless window as
+// it resizes. Read the current position and pass it through setBounds() so
+// the anchor point is always explicit instead of implicit.
+function resizeInPlace(width, height) {
+  if (!mainWindow) return;
+  const { x, y } = mainWindow.getBounds();
+  mainWindow.setBounds({ x, y, width, height });
+}
+
 ipcMain.handle('window:setCompact', (_e, compact) => {
   if (!mainWindow) return false;
   const size = compact ? COMPACT_SIZE : NORMAL_SIZE;
-  mainWindow.setSize(size.width, size.height, true);
+  resizeInPlace(size.width, size.height);
   return compact;
 });
 // Collapse the window down to just the pill toolbar, or restore it to
@@ -552,7 +562,7 @@ ipcMain.handle('window:setCompact', (_e, compact) => {
 ipcMain.handle('window:setCollapsed', (_e, collapsed, expandedSize) => {
   if (!mainWindow) return false;
   const size = collapsed ? COLLAPSED_SIZE : expandedSize || NORMAL_SIZE;
-  mainWindow.setSize(size.width, size.height, true);
+  resizeInPlace(size.width, size.height);
   return collapsed;
 });
 
