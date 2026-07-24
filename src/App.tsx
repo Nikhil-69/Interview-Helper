@@ -278,14 +278,6 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
               {captureStatus.protected ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
             </span>
           )}
-          <button
-            className={`pill-btn ${collapsed ? 'accent' : ''}`}
-            onClick={handleToggleCollapse}
-            title={collapsed ? 'Show panel' : 'Collapse to pill'}
-          >
-            {collapsed ? <Sparkles size={14} /> : <EyeOff size={14} />}
-            <span>{collapsed ? 'Ask' : 'Hide'}</span>
-          </button>
           {!collapsed && user && (
             <div className="menu-wrapper">
               <button className="icon-btn" onClick={() => setShowMenu((v) => !v)} title="More">
@@ -314,6 +306,17 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
               <Minus size={14} />
             </button>
           )}
+          {/* Kept immediately before Close in both states (same neighbor on
+              either side) so the Hide/Ask button never shifts position when
+              the surrounding buttons appear/disappear on collapse. */}
+          <button
+            className={`pill-btn ${collapsed ? 'accent' : ''}`}
+            onClick={handleToggleCollapse}
+            title={collapsed ? 'Show panel' : 'Collapse to pill'}
+          >
+            {collapsed ? <Sparkles size={14} /> : <EyeOff size={14} />}
+            <span>{collapsed ? 'Ask' : 'Hide'}</span>
+          </button>
           <button className="icon-btn square-btn" onClick={handleClose}>
             <X size={14} />
           </button>
