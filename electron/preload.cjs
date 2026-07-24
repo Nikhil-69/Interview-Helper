@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scanForCaptureApps: () => ipcRenderer.invoke('capture:scan'),
   toggleStealth: (forceState) => ipcRenderer.invoke('stealth:toggle', forceState),
   moveToNextDisplay: () => ipcRenderer.invoke('window:moveToNextDisplay'),
+  setCompactMode: (compact) => ipcRenderer.invoke('window:setCompact', compact),
+  setCollapsed: (collapsed, expandedSize) => ipcRenderer.invoke('window:setCollapsed', collapsed, expandedSize),
   onStealthChanged: (cb) => {
     const listener = (_e, visible) => cb(visible);
     ipcRenderer.on('stealth-changed', listener);
