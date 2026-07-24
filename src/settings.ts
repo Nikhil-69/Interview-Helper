@@ -30,7 +30,7 @@ export const FONT_SIZE_PX: Record<FontSize, string> = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   compact: false,
-  opacity: 40,
+  opacity: 70,
   accentColor: ACCENT_SWATCHES[0].color,
   accentHover: ACCENT_SWATCHES[0].hover,
   fontSize: 'md',

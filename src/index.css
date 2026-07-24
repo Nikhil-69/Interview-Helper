@@ -369,7 +369,7 @@ body {
   border-color: rgba(234, 179, 8, 0.35);
   color: #fde68a;
 }
-.capture-banner kbd {
+kbd {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--glass-border);
   border-radius: 4px;
@@ -548,6 +548,25 @@ input:focus, textarea:focus {
   font-size: 12px;
 }
 
+.empty-state-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.empty-state-shortcuts > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
 .message-row {
   display: flex;
   gap: 8px;
@@ -683,6 +702,15 @@ input:focus, textarea:focus {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.login-logo.pulse {
+  animation: logoPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.94); }
 }
 
 /* Settings panel */

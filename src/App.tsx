@@ -23,7 +23,7 @@ type UpdateStatus = {
   percent?: number;
   message?: string;
 };
-type View = 'login' | 'setup' | 'chat';
+type View = 'loading' | 'login' | 'setup' | 'chat';
 
 declare global {
   interface Window {
@@ -48,7 +48,10 @@ declare global {
 }
 
 function App() {
-  const [view, setView] = useState<View>('login');
+  // A saved token means we're about to verify the session — show a loading
+  // state instead of the login form so it doesn't flash before swapping to
+  // 'setup'. No token means there's nothing to restore, so go straight to login.
+  const [view, setView] = useState<View>(() => (getToken() ? 'loading' : 'login'));
   const [user, setUser] = useState<User | null>(null);
   const [credits, setCredits] = useState<number>(0);
 
@@ -128,7 +131,10 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
         setCredits(u.credits_balance);
         setView('setup');
       })
-      .catch(() => clearToken());
+      .catch(() => {
+        clearToken();
+        setView('login');
+      });
   }, []);
 
   useEffect(() => {
@@ -377,6 +383,14 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
         </div>
       )}
 
+      {!collapsed && view === 'loading' && (
+        <div className="view-container" style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <div className="login-logo pulse">
+            <Sparkles size={22} />
+          </div>
+        </div>
+      )}
+
       {!collapsed && view === 'login' && (
         <div className="view-container">
           <div className="login-brand">
@@ -508,6 +522,11 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                 </div>
                 <div className="empty-state-title">Ready to assist</div>
                 <div className="empty-state-subtitle">Upload a screenshot or ask a question to get started.</div>
+                <div className="empty-state-shortcuts">
+                  <div><kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> Hide overlay</div>
+                  <div><kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> Move to next display</div>
+                  <div><kbd>Enter</kbd> Send message</div>
+                </div>
               </div>
             )}
             {messages.map((msg, idx) => (
