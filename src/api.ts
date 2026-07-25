@@ -169,11 +169,12 @@ export async function askCopilot(
   question: string,
   images: string[] = [],
   promptMode = '',
-  customPrompt = ''
+  customPrompt = '',
+  webSearch = false
 ): Promise<{ answer: string; credits: number; creditsCharged: number }> {
   return request('/ai/ask', {
     method: 'POST',
     // imageSrc kept alongside images so an older server build still sees the first image.
-    body: { context, history, question, images, imageSrc: images[0] || null, promptMode, customPrompt },
+    body: { context, history, question, images, imageSrc: images[0] || null, promptMode, customPrompt, webSearch },
   });
 }

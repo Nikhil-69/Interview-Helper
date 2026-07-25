@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon, Zap, ExternalLink, RotateCcw } from 'lucide-react';
+import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon, Zap, ExternalLink, RotateCcw, Globe } from 'lucide-react';
 import { login, register, fetchMe, fetchPackages, createOrder, fetchOrder, payOrderMock, askCopilot, compressImage, getToken, clearToken, fetchPromptModes, DEFAULT_PROMPT_MODES, ApiError, type User, type CreditPackage, type PromptMode } from './api';
 import ReactMarkdown from 'react-markdown';
 import SettingsPanel from './components/SettingsPanel';
@@ -80,6 +80,9 @@ function App() {
   const [promptModes, setPromptModes] = useState<PromptMode[]>(DEFAULT_PROMPT_MODES);
   const [promptMode, setPromptMode] = useState('coding-interview');
   const [context, setContext] = useState('');
+  // Kimi runs the search server-side; only works on search-capable models
+  // (the server silently skips it otherwise).
+  const [webSearch, setWebSearch] = useState(false);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -356,7 +359,8 @@ function App() {
         userMessage.content,
         userMessage.images ?? [],
         promptMode,
-        isCustom ? context : ''
+        isCustom ? context : '',
+        webSearch
       );
       setCredits(res.credits);
       setMessages(prev => [...prev, { role: 'assistant', content: res.answer }]);
@@ -921,6 +925,15 @@ function App() {
                 onKeyDown={handleKeyDown}
                 rows={1}
               />
+
+              <button
+                className="icon-btn"
+                title={webSearch ? 'Web search on — answers can use live internet data' : 'Web search off'}
+                style={webSearch ? { background: 'var(--accent-color)' } : undefined}
+                onClick={() => setWebSearch((v) => !v)}
+              >
+                <Globe size={18} color={webSearch ? 'white' : 'var(--text-secondary)'} />
+              </button>
 
               <button className="icon-btn" onClick={handleTakeScreenshot} disabled={selectedImages.length >= MAX_IMAGES}>
                 <Camera size={18} />
