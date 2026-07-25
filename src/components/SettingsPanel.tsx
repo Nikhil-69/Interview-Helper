@@ -6,6 +6,8 @@ type Props = {
   settings: AppSettings;
   onChange: (partial: Partial<AppSettings>) => void;
   onClose: () => void;
+  // False on platforms with no OS-level capture-exclusion flag (Linux).
+  screenShareHidingSupported: boolean;
 };
 
 const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
@@ -14,7 +16,7 @@ const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: 'lg', label: 'Large' },
 ];
 
-function SettingsPanel({ settings, onChange, onClose }: Props) {
+function SettingsPanel({ settings, onChange, onClose, screenShareHidingSupported }: Props) {
   const [newQuickMessage, setNewQuickMessage] = useState('');
 
   const updateQuickMessage = (index: number, text: string) => {
@@ -42,6 +44,26 @@ function SettingsPanel({ settings, onChange, onClose }: Props) {
           <button className="icon-btn" onClick={onClose}>
             <X size={16} />
           </button>
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <label className="label">Hide from screen sharing</label>
+            <p className="settings-hint">
+              {screenShareHidingSupported
+                ? 'Keeps the overlay out of screen shares and recordings.'
+                : 'Not supported on Linux — the overlay always appears in shares.'}
+            </p>
+          </div>
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={settings.hideFromScreenShare}
+              disabled={!screenShareHidingSupported}
+              onChange={(e) => onChange({ hideFromScreenShare: e.target.checked })}
+            />
+            <span className="switch-track" />
+          </label>
         </div>
 
         <div className="settings-row">

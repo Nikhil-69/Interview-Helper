@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon, Zap, ExternalLink } from 'lucide-react';
-import { login, register, fetchMe, fetchPackages, createOrder, fetchOrder, payOrderMock, askCopilot, compressImage, getToken, clearToken, ApiError, type User, type CreditPackage } from './api';
+import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon, Zap, ExternalLink, RotateCcw } from 'lucide-react';
+import { login, register, fetchMe, fetchPackages, createOrder, fetchOrder, payOrderMock, askCopilot, compressImage, getToken, clearToken, fetchPromptModes, DEFAULT_PROMPT_MODES, ApiError, type User, type CreditPackage, type PromptMode } from './api';
 import ReactMarkdown from 'react-markdown';
 import SettingsPanel from './components/SettingsPanel';
 import { applySettings, loadSettings, saveSettings, NORMAL_WINDOW_SIZE, COMPACT_WINDOW_SIZE, type AppSettings } from './settings';
@@ -15,7 +15,9 @@ type Message = {
 // stays under the server's ~4.5 MB body limit.
 const MAX_IMAGES = 4;
 
-type CaptureStatus = { platform: string; protected: boolean; note: string };
+const isMac = navigator.platform.toUpperCase().includes('MAC');
+
+type CaptureStatus = { platform: string; supported: boolean; protected: boolean; note: string };
 type CaptureScan = { active: boolean; apps: string[] };
 type UpdateStatus = {
   state: 'downloading' | 'ready' | 'error';
@@ -33,6 +35,7 @@ declare global {
       closeApp: () => void;
       minimizeApp: () => void;
       getCaptureStatus: () => Promise<CaptureStatus>;
+      setContentProtection: (enabled: boolean) => Promise<CaptureStatus>;
       scanForCaptureApps: () => Promise<CaptureScan>;
       toggleStealth: (forceState?: boolean) => Promise<boolean>;
       moveToNextDisplay: () => Promise<{ id: number; label: string } | null>;
@@ -71,12 +74,12 @@ function App() {
   // signup flow, which continues to 'setup'.
   const [plansReturnView, setPlansReturnView] = useState<View | null>(null);
 
-  const [context, setContext] = useState(`I am in a coding interview. Help me solve the problem while explaining my thinking clearly to the interviewer.
-First help me restate the problem, identify inputs and outputs, clarify constraints, and surface edge cases.If the prompt is ambiguous, suggest the best clarification questions before jumping into code.
-Guide me toward a correct approach, then improve it if there is a more efficient algorithm.Explain the tradeoffs between brute force and optimized solutions, including time and space complexity.
-When code is needed, provide clean, idiomatic code with meaningful variable names.Include short comments only where they clarify tricky logic.If I already have code on screen, reason about that code directly, point out bugs, and suggest the smallest useful fix.
-For data structures and algorithms, pay special attention to boundary conditions, null or empty input, duplicates, ordering, overflow, recursion depth, and off - by - one errors.Help me prepare test cases and dry - run the algorithm.
-Keep responses in a live - interview style: concise, spoken, and focused on what I should say or type next.`);
+  // Prompt mode replaces the old hardcoded pre-meeting prompt: the server owns
+  // the per-mode system prompts; `context` is now optional extra context (or
+  // the prompt itself when mode is 'custom').
+  const [promptModes, setPromptModes] = useState<PromptMode[]>(DEFAULT_PROMPT_MODES);
+  const [promptMode, setPromptMode] = useState('coding-interview');
+  const [context, setContext] = useState('');
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -94,12 +97,20 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
   const [collapsed, setCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Apply persisted settings on launch (CSS vars + the main-process window size).
+  // Apply persisted settings on launch (CSS vars + main-process window state).
   useEffect(() => {
     applySettings(settings);
     window.electronAPI?.setCompactMode(settings.compact);
+    window.electronAPI?.setContentProtection(settings.hideFromScreenShare).then(setCaptureStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh the prompt-mode catalog from the server once signed in; the
+  // bundled DEFAULT_PROMPT_MODES list keeps the picker working offline.
+  useEffect(() => {
+    if (!user) return;
+    fetchPromptModes().then(setPromptModes).catch(() => {});
+  }, [user]);
 
   const updateSettings = (partial: Partial<AppSettings>) => {
     setSettings((prev) => {
@@ -108,6 +119,9 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
       saveSettings(next);
       if (partial.compact !== undefined) {
         window.electronAPI?.setCompactMode(partial.compact);
+      }
+      if (partial.hideFromScreenShare !== undefined) {
+        window.electronAPI?.setContentProtection(partial.hideFromScreenShare).then(setCaptureStatus);
       }
       return next;
     });
@@ -333,7 +347,17 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
 
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
-      const res = await askCopilot(context, history, userMessage.content, userMessage.images ?? []);
+      // In custom mode the textarea holds the system prompt itself; otherwise
+      // it's optional extra context appended to the mode's preset prompt.
+      const isCustom = promptMode === 'custom';
+      const res = await askCopilot(
+        isCustom ? '' : context,
+        history,
+        userMessage.content,
+        userMessage.images ?? [],
+        promptMode,
+        isCustom ? context : ''
+      );
       setCredits(res.credits);
       setMessages(prev => [...prev, { role: 'assistant', content: res.answer }]);
     } catch (error: any) {
@@ -399,11 +423,18 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                 <>
                   <div className="menu-backdrop" onClick={() => setShowMenu(false)} />
                   <div className="dropdown-menu">
+                    <button onClick={() => { setMessages([]); setSelectedImages([]); setShowMenu(false); }}>
+                      <RotateCcw size={14} /> New chat
+                    </button>
                     <button onClick={() => { setView('setup'); setShowMenu(false); }}>
-                      <Settings size={14} /> Edit context
+                      <Settings size={14} /> Mode &amp; context
                     </button>
                     <button onClick={() => { setShowSettings(true); setShowMenu(false); }}>
                       <SlidersHorizontal size={14} /> Settings
+                    </button>
+                    <button onClick={() => { setShowMenu(false); window.electronAPI?.toggleStealth(false); }}>
+                      <EyeOff size={14} /> Hide app
+                      <kbd className="menu-shortcut">{isMac ? '⌘⇧Space' : 'Ctrl+⇧+Space'}</kbd>
                     </button>
                     <button className="danger" onClick={() => { setShowMenu(false); handleLogout(); }}>
                       <LogOut size={14} /> Log out
@@ -439,6 +470,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
           settings={settings}
           onChange={updateSettings}
           onClose={() => setShowSettings(false)}
+          screenShareHidingSupported={captureStatus?.supported ?? false}
         />
       )}
 
@@ -719,12 +751,35 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
                 <MessageSquare size={13} />
               </div>
               <div className="section-header-text">
-                <label className="label" style={{ marginBottom: 0 }}>Pre-meeting Context</label>
-                <div className="section-header-hint">Helps the assistant tailor its answers</div>
+                <label className="label" style={{ marginBottom: 0 }}>Assistant Mode</label>
+                <div className="section-header-hint">Pick what you need help with</div>
               </div>
             </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: 6,
+                marginTop: 10,
+              }}
+            >
+              {promptModes.map((m) => (
+                <button
+                  key={m.value}
+                  className={promptMode === m.value ? 'primary' : ''}
+                  style={{ fontSize: 12, padding: '8px 6px' }}
+                  onClick={() => setPromptMode(m.value)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
             <textarea
-              placeholder="Paste job description, your resume highlights, or specific instructions for the AI..."
+              placeholder={
+                promptMode === 'custom'
+                  ? 'Write your own instructions for the AI — this becomes its system prompt...'
+                  : 'Optional: paste job description, resume highlights, or extra instructions...'
+              }
               value={context}
               onChange={(e) => setContext(e.target.value)}
               style={{ flex: 1, resize: 'none', marginTop: 10 }}

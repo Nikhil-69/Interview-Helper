@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Screen-capture protection / stealth
   getCaptureStatus: () => ipcRenderer.invoke('capture:getStatus'),
+  setContentProtection: (enabled) => ipcRenderer.invoke('capture:setProtection', enabled),
   scanForCaptureApps: () => ipcRenderer.invoke('capture:scan'),
   toggleStealth: (forceState) => ipcRenderer.invoke('stealth:toggle', forceState),
   moveToNextDisplay: () => ipcRenderer.invoke('window:moveToNextDisplay'),

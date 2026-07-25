@@ -21,6 +21,10 @@ const isLinux = process.platform === 'linux';
 
 let mainWindow = null;
 
+// Whether the overlay is excluded from screen capture. Mirrors the renderer's
+// persisted `hideFromScreenShare` setting, which re-applies it on launch.
+let contentProtection = true;
+
 // Stable window identity so compositor-level rules (e.g. KWin "Hide from
 // ScreenCast", niri "block-out-from") can reliably target this window.
 // See docs/LINUX_SCREEN_CAPTURE.md. Changing these strings means updating the
@@ -55,10 +59,11 @@ function createWindow() {
     },
   });
 
-  // Makes window invisible to screen capture (per user request)
-  // Supported on macOS and Windows; no-op on Linux (window is hidden during
-  // screenshots instead, see 'take-screenshot' handler).
-  mainWindow.setContentProtection(true);
+  // Makes window invisible to screen capture. Supported on macOS and Windows;
+  // no-op on Linux (window is hidden during screenshots instead, see the
+  // 'take-screenshot' handler). Toggleable from Settings — see
+  // 'capture:setProtection'.
+  mainWindow.setContentProtection(contentProtection);
 
   // Makes window hover over fullscreen apps and all workspaces
   // (visibleOnFullScreen is macOS-only and ignored elsewhere)
@@ -473,12 +478,16 @@ function getCaptureStatus() {
   if (isMac || isWindows) {
     return {
       platform: process.platform,
-      protected: true,
-      note: 'Overlay is hidden from screen shares and recordings at the OS level.',
+      supported: true,
+      protected: contentProtection,
+      note: contentProtection
+        ? 'Overlay is hidden from screen shares and recordings at the OS level.'
+        : 'Screen-share hiding is turned off — the overlay WILL appear in shares and recordings.',
     };
   }
   return {
     platform: process.platform,
+    supported: false,
     protected: false,
     note:
       'Linux has no OS flag to hide a window from screen capture. The overlay ' +
@@ -548,6 +557,13 @@ async function scanForCaptureApps() {
 }
 
 ipcMain.handle('capture:getStatus', () => getCaptureStatus());
+// Toggle whether the overlay is excluded from screen shares/recordings.
+// No-op on Linux, which has no such OS flag (getCaptureStatus reports that).
+ipcMain.handle('capture:setProtection', (_e, enabled) => {
+  contentProtection = !!enabled;
+  mainWindow?.setContentProtection(contentProtection);
+  return getCaptureStatus();
+});
 ipcMain.handle('capture:scan', () => scanForCaptureApps());
 ipcMain.handle('stealth:toggle', (_e, forceState) => toggleStealth(forceState));
 ipcMain.handle('window:moveToNextDisplay', () => moveToNextDisplay());

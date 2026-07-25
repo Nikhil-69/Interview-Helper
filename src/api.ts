@@ -142,15 +142,38 @@ export async function payOrderMock(orderId: string): Promise<{ credits: number }
   return request(`/orders/${orderId}/pay`, { method: 'POST' });
 }
 
+// --- Prompt modes ------------------------------------------------------------
+
+export type PromptMode = { value: string; label: string };
+
+// Fallback if the server can't be reached; must mirror the server catalog.
+export const DEFAULT_PROMPT_MODES: PromptMode[] = [
+  { value: 'coding-interview', label: 'Live Coding Interview' },
+  { value: 'coding-oa', label: 'Coding Test (OA)' },
+  { value: 'coding-learning', label: 'Coding Tutor' },
+  { value: 'mcq-test', label: 'MCQ Quiz Solver' },
+  { value: 'non-coding-learning', label: 'Concept Tutor' },
+  { value: 'non-mcq', label: 'Written & HR Answers' },
+  { value: 'mix', label: 'Smart Auto Mode' },
+  { value: 'custom', label: 'Custom Prompt' },
+];
+
+export async function fetchPromptModes(): Promise<PromptMode[]> {
+  const data = await request<{ modes: PromptMode[] }>('/ai/prompt-modes');
+  return data.modes;
+}
+
 export async function askCopilot(
   context: string,
   history: { role: 'user' | 'assistant'; content: string }[],
   question: string,
-  images: string[] = []
+  images: string[] = [],
+  promptMode = '',
+  customPrompt = ''
 ): Promise<{ answer: string; credits: number; creditsCharged: number }> {
   return request('/ai/ask', {
     method: 'POST',
     // imageSrc kept alongside images so an older server build still sees the first image.
-    body: { context, history, question, images, imageSrc: images[0] || null },
+    body: { context, history, question, images, imageSrc: images[0] || null, promptMode, customPrompt },
   });
 }
