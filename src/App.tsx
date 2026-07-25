@@ -219,12 +219,13 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
     }
   };
 
-  const handleSubmit = async () => {
-    if ((!input.trim() && !selectedImages.length) || isLoading) return;
+  const handleSubmit = async (overrideText?: string) => {
+    const text = overrideText ?? input;
+    if ((!text.trim() && !selectedImages.length) || isLoading) return;
 
     const userMessage: Message = {
       role: 'user',
-      content: input,
+      content: text,
       images: selectedImages.length ? selectedImages : undefined
     };
 
@@ -577,6 +578,21 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
               </div>
             )}
 
+            {settings.quickMessages.length > 0 && (
+              <div className="quick-suggestions">
+                {settings.quickMessages.map((suggestion, i) => (
+                  <button
+                    key={`${i}-${suggestion}`}
+                    className="suggestion-chip"
+                    onClick={() => handleSubmit(suggestion)}
+                    disabled={isLoading}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="input-area">
               <textarea
                 placeholder="Ask a question..."
@@ -593,7 +609,7 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
               <button
                 className="icon-btn"
                 style={{ background: (input.trim() || selectedImages.length) && !isLoading ? 'var(--accent-color)' : 'transparent' }}
-                onClick={handleSubmit}
+                onClick={() => handleSubmit()}
                 disabled={(!input.trim() && !selectedImages.length) || isLoading}
               >
                 <Send size={18} color={(input.trim() || selectedImages.length) && !isLoading ? 'white' : 'var(--text-secondary)'} />

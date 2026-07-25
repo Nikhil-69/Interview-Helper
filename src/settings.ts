@@ -12,6 +12,7 @@ export type AppSettings = {
   accentColor: string;
   accentHover: string;
   fontSize: FontSize;
+  quickMessages: string[];
 };
 
 export const ACCENT_SWATCHES = [
@@ -34,6 +35,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   accentColor: ACCENT_SWATCHES[0].color,
   accentHover: ACCENT_SWATCHES[0].hover,
   fontSize: 'md',
+  quickMessages: [
+    'What should I say?',
+    'Give me a hint',
+    'Explain this concept',
+    'What\'s the time/space complexity?',
+  ],
 };
 
 const STORAGE_KEY = 'ih_settings';

@@ -1,4 +1,5 @@
-import { X } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, X } from 'lucide-react';
 import { ACCENT_SWATCHES, darken, type AppSettings, type FontSize } from '../settings';
 
 type Props = {
@@ -14,6 +15,25 @@ const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
 ];
 
 function SettingsPanel({ settings, onChange, onClose }: Props) {
+  const [newQuickMessage, setNewQuickMessage] = useState('');
+
+  const updateQuickMessage = (index: number, text: string) => {
+    const next = [...settings.quickMessages];
+    next[index] = text;
+    onChange({ quickMessages: next });
+  };
+
+  const removeQuickMessage = (index: number) => {
+    onChange({ quickMessages: settings.quickMessages.filter((_, i) => i !== index) });
+  };
+
+  const addQuickMessage = () => {
+    const text = newQuickMessage.trim();
+    if (!text) return;
+    onChange({ quickMessages: [...settings.quickMessages, text] });
+    setNewQuickMessage('');
+  };
+
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel glass-panel" onClick={(e) => e.stopPropagation()}>
@@ -82,6 +102,37 @@ function SettingsPanel({ settings, onChange, onClose }: Props) {
                 {opt.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className="settings-row column">
+          <label className="label">Quick messages</label>
+          <p className="settings-hint">Shown as tappable suggestions above the chat input.</p>
+          <div className="quick-msg-list">
+            {settings.quickMessages.map((msg, i) => (
+              <div className="quick-msg-row" key={i}>
+                <input
+                  type="text"
+                  value={msg}
+                  onChange={(e) => updateQuickMessage(i, e.target.value)}
+                />
+                <button className="icon-btn" onClick={() => removeQuickMessage(i)}>
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="quick-msg-row">
+            <input
+              type="text"
+              placeholder="Add a quick message…"
+              value={newQuickMessage}
+              onChange={(e) => setNewQuickMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addQuickMessage()}
+            />
+            <button className="icon-btn" onClick={addQuickMessage} disabled={!newQuickMessage.trim()}>
+              <Plus size={14} />
+            </button>
           </div>
         </div>
       </div>
