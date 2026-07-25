@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, screen, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, screen, globalShortcut, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -580,6 +580,27 @@ ipcMain.handle('window:setCollapsed', (_e, collapsed, expandedSize) => {
   const size = collapsed ? COLLAPSED_SIZE : expandedSize || NORMAL_SIZE;
   resizeInPlace(size.width, size.height);
   return collapsed;
+});
+
+// Open a URL in the system browser (used for Razorpay payment links —
+// bank/UPI pages misbehave inside embedded webviews). https-only.
+ipcMain.handle('shell:openExternal', async (_e, url) => {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  try {
+    await shell.openExternal(parsed.href);
+    return true;
+  } catch (err) {
+    // xdg-open missing/misconfigured on some Linux setups — the renderer
+    // shows the URL as a fallback so the user can open it manually.
+    console.error('openExternal failed:', err);
+    return false;
+  }
 });
 
 // App controls

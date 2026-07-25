@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   moveToNextDisplay: () => ipcRenderer.invoke('window:moveToNextDisplay'),
   setCompactMode: (compact) => ipcRenderer.invoke('window:setCompact', compact),
   setCollapsed: (collapsed, expandedSize) => ipcRenderer.invoke('window:setCollapsed', collapsed, expandedSize),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   onStealthChanged: (cb) => {
     const listener = (_e, visible) => cb(visible);
     ipcRenderer.on('stealth-changed', listener);

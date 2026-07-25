@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon } from 'lucide-react';
-import { login, fetchMe, askCopilot, compressImage, getToken, clearToken, ApiError, type User } from './api';
+import { Settings, SlidersHorizontal, Sparkles, X, Minus, Send, Camera, ShieldCheck, ShieldAlert, EyeOff, MonitorUp, AlertTriangle, AlertCircle, Coins, LogOut, Download, Mail, Lock, MessageSquare, MoreVertical, User as UserIcon, Zap, ExternalLink } from 'lucide-react';
+import { login, register, fetchMe, fetchPackages, createOrder, fetchOrder, payOrderMock, askCopilot, compressImage, getToken, clearToken, ApiError, type User, type CreditPackage } from './api';
 import ReactMarkdown from 'react-markdown';
 import SettingsPanel from './components/SettingsPanel';
 import { applySettings, loadSettings, saveSettings, NORMAL_WINDOW_SIZE, COMPACT_WINDOW_SIZE, type AppSettings } from './settings';
@@ -23,7 +23,7 @@ type UpdateStatus = {
   percent?: number;
   message?: string;
 };
-type View = 'loading' | 'login' | 'setup' | 'chat';
+type View = 'loading' | 'login' | 'register' | 'plans' | 'awaiting-payment' | 'setup' | 'chat';
 
 declare global {
   interface Window {
@@ -38,6 +38,7 @@ declare global {
       moveToNextDisplay: () => Promise<{ id: number; label: string } | null>;
       setCompactMode: (compact: boolean) => Promise<boolean>;
       setCollapsed: (collapsed: boolean, expandedSize: { width: number; height: number }) => Promise<boolean>;
+      openExternal: (url: string) => Promise<boolean>;
       onStealthChanged: (cb: (visible: boolean) => void) => () => void;
       getVersion: () => Promise<string>;
       checkForUpdates: () => Promise<string | null>;
@@ -57,8 +58,18 @@ function App() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+
+  const [packages, setPackages] = useState<CreditPackage[] | null>(null);
+  const [plansError, setPlansError] = useState('');
+  const [orderingId, setOrderingId] = useState<string | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [pendingPaymentUrl, setPendingPaymentUrl] = useState<string | null>(null);
+  // Where to land after buying (or backing out of) credits. Null = fresh
+  // signup flow, which continues to 'setup'.
+  const [plansReturnView, setPlansReturnView] = useState<View | null>(null);
 
   const [context, setContext] = useState(`I am in a coding interview. Help me solve the problem while explaining my thinking clearly to the interviewer.
 First help me restate the problem, identify inputs and outputs, clarify constraints, and surface edge cases.If the prompt is ambiguous, suggest the best clarification questions before jumping into code.
@@ -181,10 +192,96 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
     }
   };
 
+  const handleRegister = async () => {
+    if (!email.trim() || !password) return;
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      const u = await register(email.trim(), password, name.trim());
+      setUser(u);
+      setCredits(u.credits_balance);
+      setPassword('');
+      setPlansReturnView(null); // fresh signup — continue to setup after purchase
+      setView('plans');
+    } catch (error: any) {
+      setAuthError(error.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Load credit packages whenever the plans screen is shown.
+  useEffect(() => {
+    if (view !== 'plans') return;
+    setPlansError('');
+    fetchPackages()
+      .then(setPackages)
+      .catch((e) => setPlansError(e.message));
+  }, [view]);
+
+  const handleChoosePackage = async (packageId: string) => {
+    if (orderingId) return;
+    setPlansError('');
+    setOrderingId(packageId);
+    try {
+      const order = await createOrder(packageId);
+      if (order.paymentUrl) {
+        setPendingOrderId(order.orderId);
+        setPendingPaymentUrl(order.paymentUrl);
+        setView('awaiting-payment');
+        // Fire-and-forget: if the system browser fails to open, the
+        // awaiting screen shows the link for manual opening/copying.
+        window.electronAPI?.openExternal(order.paymentUrl);
+      } else {
+        // Mock gateway (local dev) — no hosted page, capture directly.
+        const res = await payOrderMock(order.orderId);
+        setCredits(res.credits);
+        setView(plansReturnView ?? 'setup');
+        setPlansReturnView(null);
+      }
+    } catch (error: any) {
+      if (error instanceof ApiError && error.status === 401) {
+        handleLogout();
+        return;
+      }
+      setPlansError(error.message);
+    } finally {
+      setOrderingId(null);
+    }
+  };
+
+  const checkPendingOrder = async () => {
+    if (!pendingOrderId) return;
+    try {
+      const order = await fetchOrder(pendingOrderId);
+      if (order.status === 'paid') {
+        setPendingOrderId(null);
+        setPendingPaymentUrl(null);
+        const u = await fetchMe();
+        setUser(u);
+        setCredits(u.credits_balance);
+        setView(plansReturnView ?? 'setup');
+        setPlansReturnView(null);
+      }
+    } catch {
+      // Transient network errors are fine — the poll will try again.
+    }
+  };
+
+  // Poll the order while waiting for the Razorpay webhook to confirm payment.
+  useEffect(() => {
+    if (view !== 'awaiting-payment' || !pendingOrderId) return;
+    const id = setInterval(checkPendingOrder, 3000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, pendingOrderId]);
+
   const handleLogout = () => {
     clearToken();
     setUser(null);
     setMessages([]);
+    setPendingOrderId(null);
+    setPendingPaymentUrl(null);
     setView('login');
   };
 
@@ -272,10 +369,18 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
         </div>
         <div className="header-controls">
           {!collapsed && user && (
-            <span className="credits-pill" title="Available credits">
+            <button
+              className="credits-pill"
+              title="Buy credits"
+              onClick={() => {
+                if (view === 'plans' || view === 'awaiting-payment') return;
+                setPlansReturnView(view);
+                setView('plans');
+              }}
+            >
               <Coins size={12} />
               {credits}
-            </span>
+            </button>
           )}
           {!collapsed && captureStatus && (
             <span
@@ -441,7 +546,167 @@ Keep responses in a live - interview style: concise, spoken, and focused on what
             {authLoading ? 'Signing in…' : 'Sign in'}
           </button>
           <p className="auth-hint">
-            Don't have an account? Create one on the website, then sign in here.
+            Don't have an account?{' '}
+            <button className="link-btn" onClick={() => { setAuthError(''); setView('register'); }}>
+              Create one
+            </button>
+          </p>
+        </div>
+      )}
+
+      {!collapsed && view === 'register' && (
+        <div className="view-container">
+          <div className="login-brand">
+            <div className="login-logo">
+              <Sparkles size={22} />
+            </div>
+            <span className="login-title">Create your account</span>
+            <span className="login-subtitle">Then pick a credit pack to get started</span>
+          </div>
+
+          <div className="glass-panel">
+            <label className="label">Name</label>
+            <div className="input-with-icon">
+              <UserIcon size={15} />
+              <input
+                type="text"
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="glass-panel">
+            <label className="label">Email</label>
+            <div className="input-with-icon">
+              <Mail size={15} />
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="glass-panel">
+            <label className="label">Password</label>
+            <div className="input-with-icon">
+              <Lock size={15} />
+              <input
+                type="password"
+                placeholder="At least 6 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+              />
+            </div>
+          </div>
+          {authError && (
+            <div className="auth-error">
+              <AlertCircle size={14} style={{ flexShrink: 0 }} />
+              {authError}
+            </div>
+          )}
+          <button
+            className="primary"
+            onClick={handleRegister}
+            disabled={!email.trim() || password.length < 6 || authLoading}
+          >
+            {authLoading ? 'Creating account…' : 'Create account'}
+          </button>
+          <p className="auth-hint">
+            Already have an account?{' '}
+            <button className="link-btn" onClick={() => { setAuthError(''); setView('login'); }}>
+              Sign in
+            </button>
+          </p>
+        </div>
+      )}
+
+      {!collapsed && view === 'plans' && (
+        <div className="view-container">
+          <div className="login-brand">
+            <div className="login-logo">
+              <Zap size={22} />
+            </div>
+            <span className="login-title">Choose a credit pack</span>
+            <span className="login-subtitle">Credits power every question you ask</span>
+          </div>
+
+          {plansError && (
+            <div className="auth-error">
+              <AlertCircle size={14} style={{ flexShrink: 0 }} />
+              {plansError}
+            </div>
+          )}
+
+          {!packages && !plansError && (
+            <div className="empty-state">
+              <span className="typing-dots"><span /><span /><span /></span>
+            </div>
+          )}
+
+          {packages?.map((pkg) => (
+            <button
+              key={pkg.id}
+              className="plan-card"
+              onClick={() => handleChoosePackage(pkg.id)}
+              disabled={orderingId !== null}
+            >
+              <div className="plan-card-info">
+                <span className="plan-card-name">{pkg.name}</span>
+                <span className="plan-card-credits">{pkg.credits} credits</span>
+              </div>
+              <span className="plan-card-price">
+                {orderingId === pkg.id ? 'Opening…' : `₹${pkg.price}`}
+              </span>
+            </button>
+          ))}
+
+          {user && (plansReturnView || credits > 0) && (
+            <p className="auth-hint">
+              <button
+                className="link-btn"
+                onClick={() => {
+                  setView(plansReturnView ?? 'setup');
+                  setPlansReturnView(null);
+                }}
+              >
+                {plansReturnView ? 'Back' : `Skip for now — I have ${credits} credits`}
+              </button>
+            </p>
+          )}
+        </div>
+      )}
+
+      {!collapsed && view === 'awaiting-payment' && (
+        <div className="view-container" style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+          <div className="login-logo pulse">
+            <ExternalLink size={22} />
+          </div>
+          <span className="login-title">Waiting for payment…</span>
+          <span className="login-subtitle">
+            Complete the payment in your browser. This screen updates automatically once it goes through.
+          </span>
+          {pendingPaymentUrl && (
+            <>
+              <button
+                className="primary"
+                style={{ maxWidth: 260 }}
+                onClick={() => window.electronAPI?.openExternal(pendingPaymentUrl)}
+              >
+                Open payment page
+              </button>
+              <span className="payment-url" style={{ userSelect: 'all' }}>{pendingPaymentUrl}</span>
+            </>
+          )}
+          <button className="primary" style={{ maxWidth: 260 }} onClick={checkPendingOrder}>
+            I've paid — check now
+          </button>
+          <p className="auth-hint">
+            <button className="link-btn" onClick={() => { setPendingOrderId(null); setPendingPaymentUrl(null); setView('plans'); }}>
+              Choose a different plan
+            </button>
           </p>
         </div>
       )}

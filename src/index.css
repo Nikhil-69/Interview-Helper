@@ -193,12 +193,13 @@ body {
   background: rgba(239, 68, 68, 0.15);
 }
 
-/* Account / credits */
+/* Account / credits — clickable, opens the buy-credits (plans) view */
 .credits-pill {
   -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   gap: 4px;
+  font-family: inherit;
   font-size: 11px;
   font-weight: 600;
   padding: 3px 8px;
@@ -207,6 +208,11 @@ body {
   background: rgba(250, 204, 21, 0.12);
   color: #facc15;
   border: 1px solid rgba(250, 204, 21, 0.3);
+  transition: background 0.2s ease;
+}
+
+.credits-pill:hover {
+  background: rgba(250, 204, 21, 0.22);
 }
 
 .auth-error {
@@ -226,6 +232,71 @@ body {
   font-size: 12px;
   text-align: center;
   margin-top: 4px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* Credit-pack cards (plans view) */
+.plan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: var(--text-primary);
+  text-align: left;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.plan-card:hover:not(:disabled) {
+  border-color: var(--accent-color);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.plan-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.plan-card-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.plan-card-credits {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.plan-card-price {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-color);
+  white-space: nowrap;
+}
+
+/* Fallback payment link on the awaiting-payment screen (select-all to copy) */
+.payment-url {
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  max-width: 280px;
 }
 
 /* Login branding */

@@ -55,6 +55,16 @@ export async function login(email: string, password: string): Promise<User> {
   return data.user;
 }
 
+export async function register(email: string, password: string, name: string): Promise<User> {
+  const data = await request<{ token: string; user: User }>('/auth/register', {
+    method: 'POST',
+    body: { email, password, name },
+    auth: false,
+  });
+  localStorage.setItem(TOKEN_KEY, data.token);
+  return data.user;
+}
+
 export async function fetchMe(): Promise<User> {
   const data = await request<{ user: User }>('/auth/me');
   return data.user;
@@ -85,6 +95,51 @@ export async function compressImage(dataUrl: string, maxDim = 1920, quality = 0.
   canvas.height = Math.round(img.height * scale);
   canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/jpeg', quality);
+}
+
+// --- Credit packages / orders (Razorpay payment links) ----------------------
+
+export type CreditPackage = {
+  id: string;
+  name: string;
+  credits: number;
+  price: number;
+  currency: string;
+};
+
+export type OrderStatus = {
+  id: string;
+  credits: number;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'paid' | 'failed';
+  created_at: string;
+  paid_at: string | null;
+};
+
+export async function fetchPackages(): Promise<CreditPackage[]> {
+  const data = await request<{ packages: CreditPackage[] }>('/orders/packages', { auth: false });
+  return data.packages;
+}
+
+export async function createOrder(packageId: string): Promise<{
+  orderId: string;
+  paymentUrl: string | null;
+  amount: number;
+  currency: string;
+  credits: number;
+}> {
+  return request('/orders', { method: 'POST', body: { packageId } });
+}
+
+export async function fetchOrder(orderId: string): Promise<OrderStatus> {
+  const data = await request<{ order: OrderStatus }>(`/orders/${orderId}`);
+  return data.order;
+}
+
+// Dev-only fallback for the mock gateway (no hosted payment page).
+export async function payOrderMock(orderId: string): Promise<{ credits: number }> {
+  return request(`/orders/${orderId}/pay`, { method: 'POST' });
 }
 
 export async function askCopilot(
