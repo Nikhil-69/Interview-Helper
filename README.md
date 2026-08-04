@@ -1,11 +1,9 @@
-# Interview Copilot
+# RAG-CHAT
 
-A floating, always-on-top AI assistant for live interviews (Cluely-style), built with Electron, React, and Vite. Works on **macOS, Windows, and Linux**.
+A floating, always-on-top AI assistant for live , built with Electron, React, and Vite. Works on **macOS, Windows, and Linux**.
 
 ## Features
 
-- Transparent, frameless overlay window that floats above other apps
-- Hidden from screen capture on macOS and Windows (`setContentProtection`); on Linux the window auto-hides while taking screenshots
 - One-click full-screen screenshots sent to GPT-4o for analysis
 - Chat with pre-meeting context (job description, resume, custom instructions)
 - Global shortcut **Ctrl/Cmd + Shift + Space** to show/hide the window (useful since it skips the taskbar/dock)
